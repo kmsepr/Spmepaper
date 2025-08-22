@@ -1,66 +1,49 @@
-import os
-import datetime
 import requests
-from flask import Flask, send_file
+import datetime
+import os
+from io import BytesIO
+from PIL import Image
 
-app = Flask(__name__)
-IMG_PATH = "static/malappuram_page6.jpg"
+# Config
+EDITION = "Malappuram"
+SAVE_DIR = "suprabhaatham_epaper"
+PRAYER_PAGE = 6  # page-6 usually has prayer times
 
+def get_today_date():
+    return datetime.datetime.now().strftime("%Y-%m-%d")
 
-def fetch_page6():
-    """Fetch Malappuram edition page 6 from Suprabhaatham API."""
+def fetch_epaper_data():
     url = "https://api2.suprabhaatham.com/api/ePaper"
-    today = datetime.date.today().strftime("%Y-%m-%d")
-    payload = {"edition": "Malappuram", "date": today}
+    resp = requests.get(url)
+    resp.raise_for_status()
+    return resp.json()
 
-    try:
-        response = requests.post(url, json=payload, headers={
-            "Accept": "application/json",
-            "Content-Type": "application/json"
-        }, timeout=15)
+def download_image(url, filename):
+    resp = requests.get(url)
+    resp.raise_for_status()
+    img = Image.open(BytesIO(resp.content))
+    img.save(filename)
+    print(f"Saved: {filename}")
 
-        data = response.json()
-        pages = data.get("pages", [])
+def run_daily():
+    today = get_today_date()
+    data = fetch_epaper_data()
 
-        page6 = next((p for p in pages if p.get("pageNumber") == 6), None)
-        if not page6:
-            print("❌ Page 6 not found in API response")
-            return False
+    os.makedirs(SAVE_DIR, exist_ok=True)
 
-        img_url = page6["imageUrl"]
-        r = requests.get(img_url, timeout=15)
-        if r.status_code == 200:
-            os.makedirs("static", exist_ok=True)
-            with open(IMG_PATH, "wb") as f:
-                f.write(r.content)
-            print("✅ Page 6 downloaded:", IMG_PATH)
-            return True
-        else:
-            print("❌ Failed to download image:", r.status_code)
-            return False
+    prayer_link = None
+    for item in data:
+        if EDITION in item.get("imageUrl", "") and today in item.get("date", ""):
+            if f"page-{PRAYER_PAGE}-" in item["imageUrl"]:
+                prayer_link = item["imageUrl"]
+                break
 
-    except Exception as e:
-        print("❌ Error fetching page 6:", str(e))
-        return False
-
-
-@app.route("/prayer")
-def prayer():
-    """Serve the latest Malappuram Page 6 image."""
-    if not os.path.exists(IMG_PATH):
-        fetch_page6()
-    return send_file(IMG_PATH, mimetype="image/jpeg")
-
-
-@app.route("/")
-def home():
-    return """
-    <h2>Suprabhaatham - Malappuram Page 6</h2>
-    <p><a href="/prayer">View Page 6</a></p>
-    """
-
+    if prayer_link:
+        filename = os.path.join(SAVE_DIR, f"page-{PRAYER_PAGE}.jpeg")
+        download_image(prayer_link, filename)
+        print(f"Prayer page saved: {filename}")
+    else:
+        print("Prayer page not found for today!")
 
 if __name__ == "__main__":
-    # Fetch once on startup
-    fetch_page6()
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    run_daily()
