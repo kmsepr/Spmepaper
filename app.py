@@ -1,46 +1,65 @@
-from flask import Flask, Response, render_template_string
+# app.py
+from flask import Flask, jsonify, render_template_string
 import requests
-import datetime
+import threading
+import time
 
 app = Flask(__name__)
 
-EDITION = "Malappuram"
-EDITORIAL_PAGE = 6
+EPAPER_URL = "https://suprabhaatham.com/uploads/epaper/json/suprabhaatham.json"
+epaper_data = {"pages": []}
 
-def get_today_date():
-    return datetime.datetime.now().strftime("%Y-%m-%d")
 
 def fetch_epaper_data():
-    url = "https://api2.suprabhaatham.com/api/ePaper"
-    resp = requests.post(url, json={})  # The real site uses POST
-    resp.raise_for_status()
-    return resp.json()
+    """Fetch ePaper JSON every 1 hour (in background)."""
+    global epaper_data
+    while True:
+        try:
+            r = requests.get(EPAPER_URL, timeout=10)
+            if r.status_code == 200:
+                epaper_data = r.json()
+                print("✅ ePaper data updated")
+        except Exception as e:
+            print("⚠️ Error fetching ePaper:", e)
+        time.sleep(3600)  # refresh every 1 hr
 
-def find_editorial_page():
-    today = get_today_date()
-    data = fetch_epaper_data()
-
-    for item in data:
-        if EDITION in item.get("imageUrl", "") and today in item.get("date", ""):
-            if f"page-{EDITORIAL_PAGE}-" in item["imageUrl"]:
-                return item["imageUrl"]
-    return None
 
 @app.route("/")
 def home():
     return render_template_string("""
-        <h2>Editorial Page</h2>
-        <img src="/editorial_image" alt="Editorial Page" style="max-width:100%;"/>
+    <html>
+    <head>
+        <title>Suprabhaatham ePaper</title>
+        <style>
+            body { font-family: Arial, sans-serif; text-align: center; margin: 30px; }
+            a { display: block; margin: 10px; font-size: 18px; text-decoration: none; color: blue; }
+        </style>
+    </head>
+    <body>
+        <h1>Suprabhaatham ePaper</h1>
+        <a href="/editorial">Editorial Page (Page 6)</a>
+        <a href="/all">All Pages</a>
+    </body>
+    </html>
     """)
 
-@app.route("/editorial_image")
-def editorial_image():
-    url = find_editorial_page()
-    if not url:
-        return "Editorial page not found", 404
 
-    resp = requests.get(url)
-    return Response(resp.content, mimetype="image/jpeg")
+@app.route("/editorial")
+def editorial():
+    """Return only page 6 (editorial)."""
+    pages = epaper_data.get("pages", [])
+    if len(pages) >= 6:
+        return jsonify({"page_6": pages[5]})  # index 5 = page 6
+    return jsonify({"error": "Page 6 not available"}), 404
+
+
+@app.route("/all")
+def all_pages():
+    """Return all pages."""
+    return jsonify(epaper_data)
+
 
 if __name__ == "__main__":
+    # Start background updater
+    threading.Thread(target=fetch_epaper_data, daemon=True).start()
     app.run(host="0.0.0.0", port=8000)
