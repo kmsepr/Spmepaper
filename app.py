@@ -1,49 +1,37 @@
+from flask import Flask, Response
 import requests
-import datetime
-import os
-from io import BytesIO
-from PIL import Image
+from datetime import datetime
 
-# Config
-EDITION = "Malappuram"
-SAVE_DIR = "suprabhaatham_epaper"
-PRAYER_PAGE = 6  # page-6 usually has prayer times
+app = Flask(__name__)
 
-def get_today_date():
-    return datetime.datetime.now().strftime("%Y-%m-%d")
+def get_epaper_url():
+    """Fetch today's Suprabhaatham ePaper Page 6 image"""
+    today = datetime.now().strftime("%Y-%m-%d")
+    # Replace this with the actual Suprabhaatham API/IP source you were using earlier
+    base_url = "https://suprabhaathamepaper.com/uploads/epaper"
+    # Example: /2025/08/22/suprabhaatham-6.jpg
+    page6_url = f"{base_url}/{today}/suprabhaatham-6.jpg"
+    return page6_url
 
-def fetch_epaper_data():
-    url = "https://api2.suprabhaatham.com/api/ePaper"
-    resp = requests.get(url)
-    resp.raise_for_status()
-    return resp.json()
+@app.route("/")
+def home():
+    """Show Page 6 directly on root"""
+    img_url = get_epaper_url()
+    html = f"""
+    <html>
+    <head><title>Suprabhaatham Editorial</title></head>
+    <body style="margin:0;text-align:center;background:#f8f9fa;">
+        <h2>Suprabhaatham - Page 6 (Editorial)</h2>
+        <img src="{img_url}" style="width:100%;max-width:900px;border:1px solid #ccc;">
+    </body>
+    </html>
+    """
+    return Response(html, mimetype="text/html")
 
-def download_image(url, filename):
-    resp = requests.get(url)
-    resp.raise_for_status()
-    img = Image.open(BytesIO(resp.content))
-    img.save(filename)
-    print(f"Saved: {filename}")
-
-def run_daily():
-    today = get_today_date()
-    data = fetch_epaper_data()
-
-    os.makedirs(SAVE_DIR, exist_ok=True)
-
-    prayer_link = None
-    for item in data:
-        if EDITION in item.get("imageUrl", "") and today in item.get("date", ""):
-            if f"page-{PRAYER_PAGE}-" in item["imageUrl"]:
-                prayer_link = item["imageUrl"]
-                break
-
-    if prayer_link:
-        filename = os.path.join(SAVE_DIR, f"page-{PRAYER_PAGE}.jpeg")
-        download_image(prayer_link, filename)
-        print(f"Prayer page saved: {filename}")
-    else:
-        print("Prayer page not found for today!")
+@app.route("/editorial")
+def editorial():
+    """Same page accessible via /editorial"""
+    return home()
 
 if __name__ == "__main__":
-    run_daily()
+    app.run(host="0.0.0.0", port=8000)
