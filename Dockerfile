@@ -1,4 +1,4 @@
-# Use official Python image
+# Use lightweight Python image
 FROM python:3.11-slim
 
 # Set work directory
@@ -8,11 +8,11 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy your script
+# Copy app
 COPY app.py .
 
-# Set timezone (optional, adjust if needed)
-ENV TZ=Asia/Kolkata
+# Expose Flask port
+EXPOSE 8000
 
-# Run script when container starts
+# Run Flask
 CMD ["python", "app.py"]
