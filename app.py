@@ -1,22 +1,33 @@
 from flask import Flask, Response
 import requests
-from datetime import datetime
 
 app = Flask(__name__)
 
-def get_epaper_url():
-    """Fetch today's Suprabhaatham ePaper Page 6 image"""
-    today = datetime.now().strftime("%Y-%m-%d")
-    # Replace this with the actual Suprabhaatham API/IP source you were using earlier
-    base_url = "https://suprabhaathamepaper.com/uploads/epaper"
-    # Example: /2025/08/22/suprabhaatham-6.jpg
-    page6_url = f"{base_url}/{today}/suprabhaatham-6.jpg"
-    return page6_url
+API_URL = "https://api2.suprabhaatham.com/api/ePaper"
+EDITION = "Malappuram"
+EDITORIAL_PAGE = 6   # Page 6 = Editorial
+
+def get_editorial_url():
+    try:
+        resp = requests.get(API_URL, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+
+        for item in data:
+            if EDITION in item.get("imageUrl", ""):
+                if f"page-{EDITORIAL_PAGE}-" in item.get("imageUrl", ""):
+                    return item["imageUrl"]
+    except Exception as e:
+        print("Error fetching API:", e)
+    return None
+
 
 @app.route("/")
 def home():
-    """Show Page 6 directly on root"""
-    img_url = get_epaper_url()
+    img_url = get_editorial_url()
+    if not img_url:
+        return "<h2>Editorial page not available today!</h2>", 404
+
     html = f"""
     <html>
     <head><title>Suprabhaatham Editorial</title></head>
@@ -28,10 +39,11 @@ def home():
     """
     return Response(html, mimetype="text/html")
 
+
 @app.route("/editorial")
 def editorial():
-    """Same page accessible via /editorial"""
     return home()
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
