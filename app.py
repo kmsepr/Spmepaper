@@ -1,49 +1,46 @@
-from flask import Flask, Response
+from flask import Flask, Response, render_template_string
 import requests
+import datetime
 
 app = Flask(__name__)
 
-API_URL = "https://api2.suprabhaatham.com/api/ePaper"
 EDITION = "Malappuram"
-EDITORIAL_PAGE = 6   # Page 6 = Editorial
+EDITORIAL_PAGE = 6
 
-def get_editorial_url():
-    try:
-        resp = requests.get(API_URL, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
+def get_today_date():
+    return datetime.datetime.now().strftime("%Y-%m-%d")
 
-        for item in data:
-            if EDITION in item.get("imageUrl", ""):
-                if f"page-{EDITORIAL_PAGE}-" in item.get("imageUrl", ""):
-                    return item["imageUrl"]
-    except Exception as e:
-        print("Error fetching API:", e)
+def fetch_epaper_data():
+    url = "https://api2.suprabhaatham.com/api/ePaper"
+    resp = requests.post(url, json={})  # The real site uses POST
+    resp.raise_for_status()
+    return resp.json()
+
+def find_editorial_page():
+    today = get_today_date()
+    data = fetch_epaper_data()
+
+    for item in data:
+        if EDITION in item.get("imageUrl", "") and today in item.get("date", ""):
+            if f"page-{EDITORIAL_PAGE}-" in item["imageUrl"]:
+                return item["imageUrl"]
     return None
-
 
 @app.route("/")
 def home():
-    img_url = get_editorial_url()
-    if not img_url:
-        return "<h2>Editorial page not available today!</h2>", 404
+    return render_template_string("""
+        <h2>Editorial Page</h2>
+        <img src="/editorial_image" alt="Editorial Page" style="max-width:100%;"/>
+    """)
 
-    html = f"""
-    <html>
-    <head><title>Suprabhaatham Editorial</title></head>
-    <body style="margin:0;text-align:center;background:#f8f9fa;">
-        <h2>Suprabhaatham - Page 6 (Editorial)</h2>
-        <img src="{img_url}" style="width:100%;max-width:900px;border:1px solid #ccc;">
-    </body>
-    </html>
-    """
-    return Response(html, mimetype="text/html")
+@app.route("/editorial_image")
+def editorial_image():
+    url = find_editorial_page()
+    if not url:
+        return "Editorial page not found", 404
 
-
-@app.route("/editorial")
-def editorial():
-    return home()
-
+    resp = requests.get(url)
+    return Response(resp.content, mimetype="image/jpeg")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
