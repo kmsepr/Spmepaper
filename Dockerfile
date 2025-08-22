@@ -1,29 +1,18 @@
-# Use official lightweight Python image
+# Use official Python image
 FROM python:3.11-slim
 
-# Set working directory
+# Set work directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy requirements first (better caching)
-COPY requirements.txt .
-
 # Install dependencies
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy app code
-COPY . .
+# Copy your script
+COPY app.py .
 
-# Expose port (Koyeb will map automatically)
-EXPOSE 5000
+# Set timezone (optional, adjust if needed)
+ENV TZ=Asia/Kolkata
 
-# Environment variables
-ENV PORT=5000
-
-# Start the Flask app
+# Run script when container starts
 CMD ["python", "app.py"]
